@@ -10,7 +10,8 @@ const Index = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [recognizedShots, setRecognizedShots] = useState<Array<{id: number, text: string, duration: string, type: string}>>([]);
+  const [recognizedShots, setRecognizedShots] = useState<Array<{id: number, text: string, duration: string, type: string, image?: string, tips?: string[]}>>([]);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -71,13 +72,16 @@ const Index = () => {
         setTranscript(finalTranscript || interimTranscript);
 
         if (finalTranscript) {
+          const shotText = finalTranscript.trim();
           const newShot = {
             id: Date.now(),
-            text: finalTranscript.trim(),
+            text: shotText,
             duration: '5 сек',
-            type: 'Voice shot'
+            type: 'Voice shot',
+            tips: generateTips(shotText)
           };
           setRecognizedShots(prev => [newShot, ...prev]);
+          generateImageForShot(newShot.id, shotText);
         }
       };
 
@@ -109,6 +113,53 @@ const Index = () => {
     }
   };
 
+  const generateTips = (shotText: string): string[] => {
+    const tips = [];
+    if (shotText.includes('крупн') || shotText.includes('close')) {
+      tips.push('Фокус на глазах персонажа');
+      tips.push('Используйте диафрагму f/2.8 или шире');
+    }
+    if (shotText.includes('высот') || shotText.includes('drone') || shotText.includes('дрон')) {
+      tips.push('Проверьте разрешение на съемку');
+      tips.push('Учитывайте погодные условия');
+    }
+    if (shotText.includes('движ') || shotText.includes('tracking')) {
+      tips.push('Используйте стабилизатор или рельсы');
+      tips.push('Плавность — залог качественного кадра');
+    }
+    if (tips.length === 0) {
+      tips.push('Проверьте экспозицию перед съемкой');
+      tips.push('Используйте естественное освещение');
+    }
+    return tips;
+  };
+
+  const generateImageForShot = async (shotId: number, description: string) => {
+    setIsGeneratingImage(true);
+    try {
+      const prompt = `Black and white sketch storyboard drawing: ${description}. Simple pencil sketch style, minimal details, cinematic composition, clear focal point`;
+      
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRecognizedShots(prev => 
+          prev.map(shot => 
+            shot.id === shotId ? { ...shot, image: data.imageUrl } : shot
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Image generation error:', error);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -116,12 +167,15 @@ const Index = () => {
       
       setTimeout(() => {
         const mockShots = [
-          { id: Date.now() + 1, text: 'Вступительная сцена: камера медленно движется через городскую улицу', duration: '8 сек', type: 'Tracking shot' },
-          { id: Date.now() + 2, text: 'Крупный план: эмоциональная реакция главного героя', duration: '3 сек', type: 'Close-up' },
-          { id: Date.now() + 3, text: 'Общий план: панорама локации с высоты', duration: '6 сек', type: 'Wide shot' },
-          { id: Date.now() + 4, text: 'Средний план: диалог двух персонажей', duration: '12 сек', type: 'Medium shot' },
-          { id: Date.now() + 5, text: 'Детальная съемка: крупный план объекта', duration: '4 сек', type: 'Detail shot' }
+          { id: Date.now() + 1, text: 'Вступительная сцена: камера медленно движется через городскую улицу', duration: '8 сек', type: 'Tracking shot', tips: ['Используйте стабилизатор', 'Плавное движение - ключ к успеху', 'Снимайте в золотой час'] },
+          { id: Date.now() + 2, text: 'Крупный план: эмоциональная реакция главного героя', duration: '3 сек', type: 'Close-up', tips: ['Фокус на глазах', 'Естественное освещение', 'Минимум f/2.8'] },
+          { id: Date.now() + 3, text: 'Общий план: панорама локации с высоты', duration: '6 сек', type: 'Wide shot', tips: ['Дрон или высокая точка', 'Следите за композицией', 'Учитывайте ветер'] },
+          { id: Date.now() + 4, text: 'Средний план: диалог двух персонажей', duration: '12 сек', type: 'Medium shot', tips: ['Правило 180 градусов', 'Микрофон-петличка', 'Освещение на уровне глаз'] },
+          { id: Date.now() + 5, text: 'Детальная съемка: крупный план объекта', duration: '4 сек', type: 'Detail shot', tips: ['Макро объектив', 'Контролируйте глубину резкости', 'Стабильная опора'] }
         ];
+        mockShots.forEach(shot => {
+          generateImageForShot(shot.id, shot.text);
+        });
         setRecognizedShots(prev => [...mockShots, ...prev]);
         setIsAnalyzing(false);
       }, 2500);
@@ -137,8 +191,8 @@ const Index = () => {
               <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
                 <Icon name="Film" size={24} className="text-primary-foreground" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Shot Desk
+              <h1 className="text-2xl font-bold text-primary">
+                Shot Desk.it
               </h1>
             </div>
 
@@ -188,7 +242,7 @@ const Index = () => {
               </div>
               <h2 className="text-5xl md:text-7xl font-bold leading-tight animate-slide-up">
                 Создавай раскадровки{' '}
-                <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                <span className="italic underline decoration-2">
                   голосом
                 </span>
               </h2>
@@ -200,7 +254,7 @@ const Index = () => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8 animate-slide-up">
                 <Button
                   size="lg"
-                  className="gap-2 text-lg px-8 py-6 bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+                  className="gap-2 text-lg px-8 py-6 bg-primary text-primary-foreground hover:bg-primary/90 sketch-border"
                   onClick={handleVoiceRecord}
                 >
                   <Icon name={isRecording ? 'StopCircle' : 'Mic'} size={24} />
@@ -264,26 +318,60 @@ const Index = () => {
                 </Button>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {recognizedShots.length > 0 && recognizedShots.map((shot) => (
-                  <Card key={shot.id} className="hover:shadow-lg transition-shadow cursor-pointer group border-primary/50">
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-2">
-                        <Badge variant="default" className="bg-primary">{shot.type}</Badge>
-                        <span className="text-sm text-muted-foreground">{shot.duration}</span>
+                  <Card key={shot.id} className="hover:shadow-2xl transition-all cursor-pointer group border-2 border-primary/30 sketch-border overflow-hidden bg-card/50 backdrop-blur">
+                    {shot.image ? (
+                      <div className="aspect-video w-full overflow-hidden bg-muted">
+                        <img 
+                          src={shot.image} 
+                          alt={shot.text}
+                          className="w-full h-full object-cover grayscale"
+                        />
                       </div>
-                      <CardDescription className="text-base leading-relaxed group-hover:text-foreground transition-colors">
+                    ) : (
+                      <div className="aspect-video w-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+                        <div className="text-center p-4">
+                          <Icon name="Image" size={48} className="mx-auto mb-2 text-muted-foreground animate-pulse" />
+                          <p className="text-xs text-muted-foreground">Генерируем скетч...</p>
+                        </div>
+                      </div>
+                    )}
+                    <CardHeader className="relative z-10">
+                      <div className="flex items-start justify-between mb-3">
+                        <Badge variant="outline" className="border-primary/50 bg-background/80">{shot.type}</Badge>
+                        <span className="text-sm font-mono text-muted-foreground">{shot.duration}</span>
+                      </div>
+                      <CardDescription className="text-sm leading-relaxed text-foreground/90 font-medium">
                         {shot.text}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    {shot.tips && shot.tips.length > 0 && (
+                      <CardContent className="border-t border-border/50 bg-muted/30 relative z-10">
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                            <Icon name="Lightbulb" size={14} />
+                            Советы по съемке
+                          </p>
+                          <ul className="space-y-1">
+                            {shot.tips.map((tip, idx) => (
+                              <li key={idx} className="text-xs text-foreground/80 flex items-start gap-2">
+                                <span className="text-primary mt-0.5">•</span>
+                                <span>{tip}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </CardContent>
+                    )}
+                    <CardContent className="pt-0 pb-4 relative z-10">
                       <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" className="gap-1">
-                          <Icon name="Edit" size={16} />
+                        <Button size="sm" variant="ghost" className="gap-1 flex-1">
+                          <Icon name="Edit" size={14} />
                           Редактировать
                         </Button>
-                        <Button size="sm" variant="ghost" className="gap-1">
-                          <Icon name="Check" size={16} />
+                        <Button size="sm" variant="default" className="gap-1 bg-primary text-primary-foreground">
+                          <Icon name="Plus" size={14} />
                           В проект
                         </Button>
                       </div>
@@ -314,28 +402,28 @@ const Index = () => {
               </div>
             </section>
 
-            <section className="bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl p-12 text-center space-y-4">
+            <section className="border-2 border-primary/20 rounded-sm p-12 text-center space-y-4 sketch-border bg-card/30 backdrop-blur relative z-10">
               <Icon name="Sparkles" size={48} className="mx-auto text-primary" />
               <h3 className="text-3xl font-bold">Профессиональный подход к контенту</h3>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Shot Desk помогает структурировать идеи, планировать съемки и создавать разнообразный контент без
+                Shot Desk.it помогает структурировать идеи, планировать съемки и создавать разнообразный контент без
                 упущенных моментов
               </p>
               <div className="grid md:grid-cols-3 gap-6 mt-8 text-left">
-                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
+                <div className="border border-border/50 bg-background/50 backdrop-blur rounded-sm p-6 hover:border-primary/50 transition-colors">
                   <Icon name="Mic" size={32} className="mb-3 text-primary" />
                   <h4 className="font-bold text-lg mb-2">Голосовая запись</h4>
                   <p className="text-sm text-muted-foreground">Диктуй идеи на русском — система распознает и создаст раскадровки автоматически</p>
                 </div>
-                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
+                <div className="border border-border/50 bg-background/50 backdrop-blur rounded-sm p-6 hover:border-primary/50 transition-colors">
                   <Icon name="Video" size={32} className="mb-3 text-primary" />
                   <h4 className="font-bold text-lg mb-2">Анализ видео</h4>
                   <p className="text-sm text-muted-foreground">Загружай рилсы или отрывки из фильмов — мы извлечем структуру кадров</p>
                 </div>
-                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
-                  <Icon name="FolderOpen" size={32} className="mb-3 text-primary" />
-                  <h4 className="font-bold text-lg mb-2">Управление проектами</h4>
-                  <p className="text-sm text-muted-foreground">Организуй раскадровки по проектам и отслеживай прогресс съемок</p>
+                <div className="border border-border/50 bg-background/50 backdrop-blur rounded-sm p-6 hover:border-primary/50 transition-colors">
+                  <Icon name="Image" size={32} className="mb-3 text-primary" />
+                  <h4 className="font-bold text-lg mb-2">AI-скетчи</h4>
+                  <p className="text-sm text-muted-foreground">Каждый кадр получает визуальный скетч и советы по съемке</p>
                 </div>
               </div>
             </section>
@@ -473,9 +561,9 @@ const Index = () => {
         )}
       </main>
 
-      <footer className="border-t border-border mt-24 py-12">
+      <footer className="border-t border-border mt-24 py-12 relative z-10">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>Shot Desk © 2024 • Создавай лучший контент с профессиональным подходом</p>
+          <p className="font-mono text-sm">Shot Desk.it © 2024 • Создавай лучший контент с профессиональным подходом</p>
         </div>
       </footer>
     </div>

@@ -10,7 +10,7 @@ const Index = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [recognizedShots, setRecognizedShots] = useState<Array<{id: number, text: string, duration: string, type: string, image?: string, tips?: string[]}>>([]);
+  const [recognizedShots, setRecognizedShots] = useState<Array<{id: number, text: string, duration: string, type: string, image?: string, tips?: string[], completed?: boolean}>>([]);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -311,95 +311,101 @@ const Index = () => {
 
             <section className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-3xl font-bold">Последние раскадровки</h3>
-                <Button variant="ghost" className="gap-2">
-                  Смотреть все
-                  <Icon name="ArrowRight" size={18} />
-                </Button>
+                <h3 className="text-3xl font-bold">Раскадровка</h3>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{recognizedShots.filter(s => s.completed).length} / {recognizedShots.length} снято</span>
+                </div>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {recognizedShots.length > 0 && recognizedShots.map((shot) => (
-                  <Card key={shot.id} className="hover:shadow-2xl transition-all cursor-pointer group border-2 border-primary/30 sketch-border overflow-hidden bg-card/50 backdrop-blur">
-                    {shot.image ? (
-                      <div className="aspect-video w-full overflow-hidden bg-muted">
-                        <img 
-                          src={shot.image} 
-                          alt={shot.text}
-                          className="w-full h-full object-cover grayscale"
-                        />
-                      </div>
-                    ) : (
-                      <div className="aspect-video w-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
-                        <div className="text-center p-4">
-                          <Icon name="Image" size={48} className="mx-auto mb-2 text-muted-foreground animate-pulse" />
-                          <p className="text-xs text-muted-foreground">Генерируем скетч...</p>
-                        </div>
-                      </div>
-                    )}
-                    <CardHeader className="relative z-10">
-                      <div className="flex items-start justify-between mb-3">
-                        <Badge variant="outline" className="border-primary/50 bg-background/80">{shot.type}</Badge>
-                        <span className="text-sm font-mono text-muted-foreground">{shot.duration}</span>
-                      </div>
-                      <CardDescription className="text-sm leading-relaxed text-foreground/90 font-medium">
-                        {shot.text}
-                      </CardDescription>
-                    </CardHeader>
-                    {shot.tips && shot.tips.length > 0 && (
-                      <CardContent className="border-t border-border/50 bg-muted/30 relative z-10">
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                            <Icon name="Lightbulb" size={14} />
-                            Советы по съемке
-                          </p>
-                          <ul className="space-y-1">
-                            {shot.tips.map((tip, idx) => (
-                              <li key={idx} className="text-xs text-foreground/80 flex items-start gap-2">
-                                <span className="text-primary mt-0.5">•</span>
-                                <span>{tip}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </CardContent>
-                    )}
-                    <CardContent className="pt-0 pb-4 relative z-10">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" className="gap-1 flex-1">
-                          <Icon name="Edit" size={14} />
-                          Редактировать
-                        </Button>
-                        <Button size="sm" variant="default" className="gap-1 bg-primary text-primary-foreground">
-                          <Icon name="Plus" size={14} />
-                          В проект
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                {recentShots.map((shot) => (
-                  <Card key={shot.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-2">
-                        <Badge variant="outline">{shot.type}</Badge>
-                        <span className="text-sm text-muted-foreground">{shot.duration}</span>
-                      </div>
-                      <CardDescription className="text-base leading-relaxed group-hover:text-foreground transition-colors">
-                        {shot.text}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" className="gap-1">
-                          <Icon name="Edit" size={16} />
-                          Редактировать
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {recognizedShots.length > 0 && (
+                <Card className="border-2 border-primary/20 sketch-border overflow-hidden bg-card/30 backdrop-blur">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b border-border bg-muted/30">
+                        <tr>
+                          <th className="text-left p-4 font-semibold w-12">✅</th>
+                          <th className="text-left p-4 font-semibold w-20">№</th>
+                          <th className="text-left p-4 font-semibold w-32">Превью</th>
+                          <th className="text-left p-4 font-semibold">Описание кадра</th>
+                          <th className="text-left p-4 font-semibold w-32">Тип</th>
+                          <th className="text-left p-4 font-semibold w-24">Время</th>
+                          <th className="text-left p-4 font-semibold w-64">Советы</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recognizedShots.map((shot, index) => (
+                          <tr 
+                            key={shot.id} 
+                            className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${
+                              shot.completed ? 'opacity-60' : ''
+                            }`}
+                          >
+                            <td className="p-4">
+                              <input
+                                type="checkbox"
+                                checked={shot.completed || false}
+                                onChange={() => {
+                                  setRecognizedShots(prev => 
+                                    prev.map(s => 
+                                      s.id === shot.id ? { ...s, completed: !s.completed } : s
+                                    )
+                                  );
+                                }}
+                                className="w-5 h-5 rounded border-2 border-border cursor-pointer accent-primary"
+                              />
+                            </td>
+                            <td className="p-4">
+                              <span className="font-mono font-bold text-lg">{index + 1}</span>
+                            </td>
+                            <td className="p-4">
+                              {shot.image ? (
+                                <img 
+                                  src={shot.image} 
+                                  alt={`Кадр ${index + 1}`}
+                                  className="w-24 h-16 object-cover rounded border border-border grayscale"
+                                />
+                              ) : (
+                                <div className="w-24 h-16 bg-muted rounded border border-border flex items-center justify-center">
+                                  <Icon name="Image" size={20} className="text-muted-foreground" />
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <p className={`text-sm leading-relaxed ${
+                                shot.completed ? 'line-through text-muted-foreground' : 'text-foreground'
+                              }`}>
+                                {shot.text}
+                              </p>
+                            </td>
+                            <td className="p-4">
+                              <Badge variant="outline" className="border-primary/50">
+                                {shot.type}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              <span className="font-mono text-sm text-muted-foreground">
+                                {shot.duration}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              {shot.tips && shot.tips.length > 0 && (
+                                <div className="space-y-1">
+                                  {shot.tips.map((tip, idx) => (
+                                    <p key={idx} className="text-xs text-muted-foreground flex items-start gap-1">
+                                      <span className="text-primary mt-0.5">•</span>
+                                      <span>{tip}</span>
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
             </section>
 
             <section className="border-2 border-primary/20 rounded-sm p-12 text-center space-y-4 sketch-border bg-card/30 backdrop-blur relative z-10">

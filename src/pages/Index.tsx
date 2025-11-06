@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -9,6 +9,10 @@ import Icon from '@/components/ui/icon';
 const Index = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [recognizedShots, setRecognizedShots] = useState<Array<{id: number, text: string, duration: string, type: string}>>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   const projects = [
     {
@@ -43,12 +47,84 @@ const Index = () => {
     { id: 3, text: 'Средний план: группа друзей идет по улице в золотой час', duration: '8 сек', type: 'Medium shot' }
   ];
 
-  const handleVoiceRecord = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording) {
-      setTimeout(() => {
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'ru-RU';
+
+      recognitionRef.current.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcriptPiece = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcriptPiece + ' ';
+          } else {
+            interimTranscript += transcriptPiece;
+          }
+        }
+
+        setTranscript(finalTranscript || interimTranscript);
+
+        if (finalTranscript) {
+          const newShot = {
+            id: Date.now(),
+            text: finalTranscript.trim(),
+            duration: '5 сек',
+            type: 'Voice shot'
+          };
+          setRecognizedShots(prev => [newShot, ...prev]);
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
         setIsRecording(false);
-      }, 3000);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsRecording(false);
+      };
+    }
+  }, []);
+
+  const handleVoiceRecord = () => {
+    if (!recognitionRef.current) {
+      alert('Голосовое распознавание не поддерживается в вашем браузере. Используйте Chrome или Edge.');
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      setTranscript('');
+    } else {
+      setTranscript('');
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
+
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setIsAnalyzing(true);
+      
+      setTimeout(() => {
+        const mockShots = [
+          { id: Date.now() + 1, text: 'Вступительная сцена: камера медленно движется через городскую улицу', duration: '8 сек', type: 'Tracking shot' },
+          { id: Date.now() + 2, text: 'Крупный план: эмоциональная реакция главного героя', duration: '3 сек', type: 'Close-up' },
+          { id: Date.now() + 3, text: 'Общий план: панорама локации с высоты', duration: '6 сек', type: 'Wide shot' },
+          { id: Date.now() + 4, text: 'Средний план: диалог двух персонажей', duration: '12 сек', type: 'Medium shot' },
+          { id: Date.now() + 5, text: 'Детальная съемка: крупный план объекта', duration: '4 сек', type: 'Detail shot' }
+        ];
+        setRecognizedShots(prev => [...mockShots, ...prev]);
+        setIsAnalyzing(false);
+      }, 2500);
     }
   };
 
@@ -143,8 +219,38 @@ const Index = () => {
                       <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                       <span className="text-sm font-medium">Идет запись...</span>
                     </div>
-                    <Progress value={33} className="h-2" />
+                    {transcript && (
+                      <p className="text-sm text-muted-foreground mt-3 p-3 bg-muted rounded">{transcript}</p>
+                    )}
                   </div>
+                </div>
+              )}
+
+              <div className="mt-8">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoUpload}
+                    className="hidden"
+                  />
+                  <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary transition-colors">
+                    <Icon name="Upload" size={48} className="mx-auto mb-4 text-muted-foreground" />
+                    <h4 className="text-lg font-semibold mb-2">Загрузи видео для анализа</h4>
+                    <p className="text-sm text-muted-foreground">Загрузи ролик или отрывок из фильма — мы извлечем раскадровки</p>
+                  </div>
+                </label>
+              </div>
+
+              {isAnalyzing && (
+                <div className="mt-6 animate-fade-in">
+                  <Card>
+                    <CardContent className="py-8 text-center">
+                      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-lg font-medium">Анализируем видео...</p>
+                      <p className="text-sm text-muted-foreground mt-2">Извлекаем кадры и создаем раскадровку</p>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </section>
@@ -159,6 +265,31 @@ const Index = () => {
               </div>
 
               <div className="grid md:grid-cols-3 gap-6">
+                {recognizedShots.length > 0 && recognizedShots.map((shot) => (
+                  <Card key={shot.id} className="hover:shadow-lg transition-shadow cursor-pointer group border-primary/50">
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-2">
+                        <Badge variant="default" className="bg-primary">{shot.type}</Badge>
+                        <span className="text-sm text-muted-foreground">{shot.duration}</span>
+                      </div>
+                      <CardDescription className="text-base leading-relaxed group-hover:text-foreground transition-colors">
+                        {shot.text}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" className="gap-1">
+                          <Icon name="Edit" size={16} />
+                          Редактировать
+                        </Button>
+                        <Button size="sm" variant="ghost" className="gap-1">
+                          <Icon name="Check" size={16} />
+                          В проект
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
                 {recentShots.map((shot) => (
                   <Card key={shot.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
                     <CardHeader>
@@ -190,6 +321,23 @@ const Index = () => {
                 Shot Desk помогает структурировать идеи, планировать съемки и создавать разнообразный контент без
                 упущенных моментов
               </p>
+              <div className="grid md:grid-cols-3 gap-6 mt-8 text-left">
+                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
+                  <Icon name="Mic" size={32} className="mb-3 text-primary" />
+                  <h4 className="font-bold text-lg mb-2">Голосовая запись</h4>
+                  <p className="text-sm text-muted-foreground">Диктуй идеи на русском — система распознает и создаст раскадровки автоматически</p>
+                </div>
+                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
+                  <Icon name="Video" size={32} className="mb-3 text-primary" />
+                  <h4 className="font-bold text-lg mb-2">Анализ видео</h4>
+                  <p className="text-sm text-muted-foreground">Загружай рилсы или отрывки из фильмов — мы извлечем структуру кадров</p>
+                </div>
+                <div className="bg-background/50 backdrop-blur rounded-lg p-6">
+                  <Icon name="FolderOpen" size={32} className="mb-3 text-primary" />
+                  <h4 className="font-bold text-lg mb-2">Управление проектами</h4>
+                  <p className="text-sm text-muted-foreground">Организуй раскадровки по проектам и отслеживай прогресс съемок</p>
+                </div>
+              </div>
             </section>
           </div>
         )}
